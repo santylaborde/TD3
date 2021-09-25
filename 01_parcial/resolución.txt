@@ -1,0 +1,66 @@
+1) ¿Cuántos bits de la dirección presente en el bus, son significativos al direccionar datos o código, cuando un procesador IA-32  ejecuta el reset vector?
+
+Cuando se ejecuta el reset vector y el procesador arranca, nos encontramos en 16 bits o bien en MODO REAL. Durante este momento el procesador tiene un espacio direccionable de memoria de 1MB. Esto se debe a que dispone de 20 bits para el address.
+
+
+2) Explicar qué es el Stack Frame. Para qué sirve y qué función (según la ABI) debería ser la responsable de armarlo? Qué pasa cuando la función “llamada” está escrita en C y “gcc” se ejecuta sin optimizaciones? y cuándo gcc se compila con optimizaciones?
+
+El stack frame es un espacio de memoria entre el EBP (Base Pointer) y EBP-OFFSET. Se usa para guardar las variables locales de la funcion a la que llamamos.
+Al retornar de la funcion, este espacio de memoria se libera. Haciendo que las variables locales solo existan dentro de la función.
+Nosotros somos los responasbles de armarlo cuando hacemos un llamado en ASM a una función en C con:
+mov  ebp, esp
+push ebp
+Y luego pusheamos los argumentos de la funcion según el formato ABI.
+
+
+3) ¿Qué excepción se produce si al modificar el registro SS para cambiar un stack la página que mapea en la MMU la dirección lineal del stack tiene P=1?.
+
+Creo que no se debería generar ninguna excepción, dado que la pagina se encontraría presente.
+
+4) Indicar el valor que debe asignársele a los atributos que considere significativos, para el descriptor de página que contendrá  el código perteneciente al código de una tarea. ¿Que diferencias propone para un descriptor de página que contiene código de syscalls? Justifique.
+
+PARA EL CODIGO DE UNA TAREA
+Considero significativos los bits de:
+U/S: 1 (USER)
+R/W: 0 (READABLE)
+
+PARA UNA SYSCALL
+Considero significativos los bits de:
+U/S: 0 (SUPERVISOR)
+R/W: 0 (READABLE)
+
+Si la tarea desea acceder a un servicio del kernel deberá realizar un "int 0x80".
+
+5) Un procesador IA-32 operando en modo protegido, dispone de un CS representado por un descriptor cuyo bit D/B — Default operation size (0 = 16-bit segment; 1 = 32-bit segment) se encuentra en 0. Explicar para qué sirven los prefijos 0x66 y 0x67 en este caso. Indicar cuál es el efecto de ejecutar código ensamblado con USE32.
+
+####
+0x66 cambia el tamaño del dato esperado según si nuestra instrucción es en 16 o 32 bits 
+0x67 cambia el tamaño de la direccion esperada por defecto de la instrucción.
+
+Sirven para describir si el comando que ejecutaremos es de 16 o 32 bits y las direcciones son de 16 o 32 bits.
+
+USE32 sirve para indicarle al sistema que el código siguiente será en formato de 32 bits. Si quieremos usar formato 16 bits, necesitamos USE16.
+
+
+6) ¿Qué significa y dónde se encuentran DPL, RPL y CPL? ¿Qué entiende por EPL y para qué sirve? ¿Qué particularidad tiene RPL en el caso de SS?
+
+DPL: Descriptor privilege level, es el nivel de privilegio del segmento al cual se esta accediendo. Es el nivel necesario para poder acceder al segmento.
+
+RPL: Requested privilege level, es el valor que se escribe en los selectores en los bits 0 y 1. El procesador lo compara con el CPL.
+
+CPL: Current privilege level, es el nivel de privilegio actual, es decir el del código que se esta ejecutando. Se obtiene del campo DPL del descriptor del segmento donde se encuentra contenido el código.
+
+
+7) Explique cuál es la diferencia a nivel arquitectura entre un set de instrucciones RISC o CISC con uno que soporte SIMD. ¿De qué forma se produce la mejora? Explique con algún algoritmo que muestre la diferencia de implementación.
+
+RISC: son un set de instrucciones simple, que contiene pocas instrucciones. Requiriendo realizar códigos mas extensos.
+CISC: son un set de instrucciones complejas, que contiene muchas instrucciones.
+
+Un set de instrucciones que soporte SIMD (single instruction multiple data) a nivel de arquitectura permite implementar una sola operación sobre un conjunto de datos. Esto se lo conoce como "paralelismo a nivel de datos".
+
+
+8) Cuales son las condiciones para que el bit busy sea activado y desactivado en un descriptor de segmento de TSS. Explique el comportamiento de este bit de acuerdo con sus estados posibles.
+
+Las condiciones para que el bit BUSY será activado cuando la tarea está siendo ejecutada, esto permite no volver a entrar en la tarea de manera iterativa. Si se trata de llamar a ua tarea con BUSY activo se provocará una #GP.
+Cuando hay anidamiento de tareas y la tarea 1 llama a la tarea 2 con un "CALL", el bit busy de la tarea 1 se encuentra activo aunque la que se encuentre corriendo sea la tarea 2.
+Por otro lado si se hubise realizado un salto "JMP" a la tarea 2 el bit BUSY de la tarea 1 se desactivaría, ya que no espera retornar.
