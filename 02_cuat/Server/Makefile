@@ -23,6 +23,7 @@ OUTPUT 	= $(EXEPATH)$(EXEFILE)
 # Instructions:
 # Compile
 all: 
+	@clear
 	@echo "\n*****************************"
 	@echo "********* Compiling *********"
 	@echo "-----------------------------"

@@ -1,31 +1,26 @@
 /**
- * @file server.h
+ * @file signals.h
  * @author slaborde
- * @brief Archivo de cabecera del servidor
- * @date 2021-09-14
+ * @brief Archivo de cabecera para el manejo de señales
+ * @date 2021-10-05
  */
 
 /* INCLUDES */
-#include "sockets.h"
-#include "fork.h"
-#include "memory.h"
 #include "config.h"
-#include "signals.h"
 
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <time.h>
+#include <signal.h>
+#include <stdio.h>
+#include <sys/wait.h>   // waitpid()
+#include <unistd.h>     // close()
 
 /* EXTERNS */
 extern int MAX_CLIENTS;  // Cantidad Máxima de Conexiones
 extern int BACKLOG_SRV;  // Cantidad de pedidos de conexión que bufferea
 extern int SIZE_WINDOW;  // Tamaño de la ventana del filtro
 extern int CLT_TIMEOUT;  // Tiempo máximo de inactividad del cliente
-
-/* DEFINES */
-#define CLIENT_CONNECTED    1
-#define REQUEST_DATA        "sensor"
+extern int CLIENTS;      // Número actual de clientes
+extern int new_socket;   // Socket del cliente
 
 /* PROTOTYPES */
-void waiting(int);
+int init_signals(void);
+void my_handler(int signum);

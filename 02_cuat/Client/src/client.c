@@ -39,7 +39,6 @@ int main(int argc, char const *argv[])
 
 		/* ENVIA DATOS */
 		send(client_fd, buffer, strlen(hello) , 0 );
-		printf("[CLIENT] Message sent\n");
 
 		if(!strcmp(buffer,REQUEST_DATA))
 		{

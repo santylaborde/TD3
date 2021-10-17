@@ -6,21 +6,70 @@
  */
 
 #include "../inc/server.h"
-#include <sys/types.h>
-#include <sys/wait.h>
 
 int RUNNING= 1;
+int CLIENTS= 0;
+int new_socket;
 
 int main()
 {
-	int valread;
-	char buffer[1024] = {0};
-	char *ack = "Message Received";
+	/*---------------- INIT CONFIG FILE --------------*/
+	int status= load_config();
+
+	if (status == -1) 
+	{   
+		exit(EXIT_FAILURE);
+	} 
+
+	printf("*****************************\n");
+	printf("*** Loading configuration ***\n");
+	printf("-----------------------------\n");
+	printf("| -MAX_CLIENTS= %d\n", MAX_CLIENTS);
+	printf("| -BACKLOG_SRV= %d\n", BACKLOG_SRV);            
+	printf("| -SIZE_WINDOW= %d\n", SIZE_WINDOW);
+	printf("| -CLT_TIMEOUT= %d\n", CLT_TIMEOUT);
+	printf("-----------------------------\n");
 	
-	/*---------------- INIT CONFIG FILE ---------------*/
-	int file_fd = 0;
+	/*---------------- INIT SIGNALS ------------------*/
+	status= init_signals();
+
+	if(status == -1)
+	{
+		exit(EXIT_FAILURE);
+	}
+
+	/**
+     * @brief Crea una llave, apartir del id de un archivo y del proj_id, para utilizar una memoria compartida.
+     * @param File: archivo con su respectiva ruta.
+     * @param proj_id: se utilizan solo los 8 bits menos significativos.
+     */
+    key_t key = ftok(KEY_FILE, 'S');
+
+    if (key == -1)
+    {
+        perror("ftok failed");
+        exit(1);
+    }
+
+    /*---------------- INIT SHARED MEMORY ------------*/
+	int *memoryAddress;
+	int shmid = init_shared_memory(key, &memoryAddress);
 	
-	/*------------------ INIT SOCKET ------------------*/
+	if (shmid < 0)
+	{
+		exit(EXIT_FAILURE);
+	}
+
+	/*---------------- INIT SEMAPHORES ------------*/
+	// int *memoryAddress;
+	// int shmid = init_semaphores(key);
+	
+	// if (shmid < 0)
+	// {
+	// 	exit(EXIT_FAILURE);
+	// }
+
+	/*---------------- INIT SOCKET -------------------*/
 	int server_fd = init_socket();	// file descriptor del server socket
 	
 	if(server_fd == -1)
@@ -29,26 +78,22 @@ int main()
 	}
 	
 	/*------------- WACTH FILE DESCRIPTORS ------------*/	
-	int time= -1;			// 
-	int childs= 0;			// child counter
+	int time= -1;			 
 	pid_t new_pid;
-	int pid_status;
 	int sensor_value;
 
 	int ready_fd;
-	int greater_fd;
+	int greater_fd= server_fd;
 
-	if(file_fd > server_fd)
-		greater_fd = file_fd;
-	else
-		greater_fd = server_fd;		
+	int valread;
+	char buffer[1024] = {0};
+	char *ack = "Message Received";	
 
 	/*------------------- MAIN LOOP ------------------*/
 	while(RUNNING) 					// main loop
 	{
 		fd_set read_fds;			// list of readable file descriptors for being watched
 		FD_ZERO(&read_fds);
-		FD_SET(file_fd, &read_fds);
 		FD_SET(server_fd, &read_fds);
 
 		struct timeval timeout;
@@ -62,27 +107,29 @@ int main()
 
 		switch(ready_fd)
 		{
-			case -1: 	/* ERROR  chequear EINTR*/
-				perror("[SERVER] select");
-				exit(EXIT_FAILURE);
+			case -1: 	/* ERROR */
+				if (errno != EINTR)	// SIGNAL no capturada
+				{
+					perror("[SERVER] select");
+					exit(EXIT_FAILURE);
+				}
 				break;
 			
 			case 0:		/* TIME OUT */
-				// waiting(time);
-				time++;
+				if(!CLIENTS)		// Mensaje de esperando conexión
+				{
+					waiting(time);
+					time++;
+				}
 			 	break;
 
 			default:	/* FD READY */
 				time= -1;
-				/*--------------- CONFIG FILE READY --------------*/
-			 	if(FD_ISSET(file_fd, &read_fds))
-				{
-
-				}
+				
 				/*---------------- SOCKET READY ------------------*/
-				else if(FD_ISSET(server_fd, &read_fds))
+				if(FD_ISSET(server_fd, &read_fds))
 				{
-					int new_socket = accept_client(server_fd);
+					new_socket = accept_client(server_fd);
 
 					/*----------------- MULTIPROCESO ------------------*/
 					/**
@@ -99,17 +146,19 @@ int main()
 
 						case CHILD:			/* CHILD */
 
-							if (childs > MAX_CLIENT)
+							if (CLIENTS > MAX_CLIENTS)
 							{
-								perror("[SERVER] Too many clients connected, try again later");
+								perror("[SERVER] Too many clients connected, try again later\n");
 								exit(EXIT_FAILURE);
 							}
 							
 							while(CLIENT_CONNECTED)
 							{
+								alarm(CLT_TIMEOUT);  // Cuenta el tiempo de inactividad del cliente 
+
 								/* RECIBE DATOS */
 								valread= recv(new_socket , buffer, 1024, 0);
-
+								
 								switch (valread)
 								{
 									case -1:
@@ -119,31 +168,39 @@ int main()
 									case 0:
 										if(buffer[0]!='\0')
 										{
-											printf("[SERVER] Se desconecto el cliente %d\n", childs+1);
-											buffer[0]='\0';
+											printf("new_socket is %d\n", new_socket);
+											printf("[SERVER] Client %d disconnected\n", CLIENTS+1);
+											buffer[0]='\0';																					
+
+											exit(EXIT_SUCCESS);	// Termina el proceso hijo que atendió al cliente
 										}
 										break; 
 									
 									default:
-										printf("[CLIENT%d] %s\n", childs+1, buffer);
+										alarm(0);  // Reinicia el tiempo de inactividad del cliente 
 
+										/* IMPRIME DATOS */
+										printf("El pid del hijo es: %d\n", getpid());
+										printf("[CLIENT%d] %s\n", CLIENTS+1, buffer);
+										
+										/* ENVIA DATOS SENSOR */
 										if(!strcmp(buffer,REQUEST_DATA))
 										{
 											sensor_value= rand();
-											send(new_socket , &sensor_value , sizeof(int) , 0 );
+											send(new_socket, &sensor_value , sizeof(int) , 0 );
 										}
+
+										/* ENVIA ACKNOWLEDGEMENT */
+										send(new_socket , ack , strlen(ack) , 0 );
 										break;
 								}
-
-								/* ENVIA DATOS */
-								send(new_socket , ack , strlen(ack) , 0 );
 							}
-							
+
 							break;
 
 						default:		/* PARENT */
-							childs++; 	
-							printf("[SERVER] Cliente: %d atendido por PID: %d\n", childs, new_pid);		
+							CLIENTS++; 	
+							printf("[SERVER] Client: %d assisted by the PID: %d\n", CLIENTS, new_pid);		
 							close(new_socket);
 							break;
 					}
@@ -156,14 +213,6 @@ int main()
                
 			   	break;
 		}
-
-    	new_pid=waitpid(0, &pid_status, 1);
-
-    	if (new_pid>0)
-		{
-			childs--;   
-			printf("[SERVER] Cantidad actual de clientes: %d \n", childs);
-		}
 	}
 
     close(server_fd);
@@ -171,6 +220,10 @@ int main()
 	return EXIT_SUCCESS;
 }
 
+/**
+ * @brief Imprime el mensaje de esperando conexiones
+ * @param time 
+ */
 void waiting(int time)
 {
 	switch (time%4)
@@ -196,7 +249,6 @@ void waiting(int time)
 		
 		case 3: 
 			printf("\033[F");
-			// printf("\033[3D");
 			printf("[SERVER] Waiting for conections...\n");
 			break;
 

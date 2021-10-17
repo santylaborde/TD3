@@ -43,6 +43,14 @@ int init_socket(void)
 	addrServer.sin_port = htons(PORT);          // Puerto
                                                 // htons() [host to network short] convierte un número en formato "host order byte" a "network order byte".
     
+
+    /**
+     * @brief Evita que el puerto del server quede bloqueado en caso de cerrar el server sin close
+     * 
+     */
+    int activated= 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &activated, sizeof(activated));
+
     /*************************  ASIGNA EL PUERTO    *************************/
     /**
      * @brief Le asigna al objeto "socket" que recibe en el primer argumento, una direccion ip y un puerto.
@@ -67,11 +75,11 @@ int init_socket(void)
      * @param Cantidad de pedidos de conexión que el proceso almacenará mientras se responde al pedido de conexión en curso de ser aceptado.
      * @return Resultado de la función
      */
-    status = listen(server_fd, BACKLOG);
+    status = listen(server_fd, BACKLOG_SRV);
 
 	if (status < 0)
 	{
-		perror("listen");
+		perror("listen failed");
         close(server_fd);
 		return -1;
 	}
@@ -107,7 +115,7 @@ int accept_client(int server_fd)
 
 	if (new_socket < 0)
 	{
-		perror("accept");
+		perror("accept failed");
 		return -1;
 	}
     

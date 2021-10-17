@@ -12,12 +12,12 @@
 #include <stdio.h>          // perror();
 #include <arpa/inet.h>      // inet_ntoa()
 
+/* EXTERNS */
+extern int BACKLOG_SRV;
+
+/* DEFINES */
+#define PORT 8080
 
 /* PROTOTYPES */
 int init_socket(void);
 int accept_client(int server_fd);
-
-/* DEFINES */
-#define PORT        8080
-#define BACKLOG     3
-#define MAX_CLIENT  2

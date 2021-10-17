@@ -1,0 +1,8 @@
+#*****************************************************************************
+#               ARCHIVO DE CONFIGURACIONES DEL SERVIDOR
+#-----------------------------------------------------------------------------
+
+MAX_CLIENTS: 100   # [Cantidad Máxima de Conexiones]
+BACKLOG_SRV:  20    # [Cantidad de pedidos de conexión que bufferea (backlog)]
+SIZE_WINDOW:   2     # [Tamaño de la ventana del filtro]
+CLT_TIMEOUT:  10      # [Tiempo máximo de inactividad del cliente]
